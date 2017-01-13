@@ -11,27 +11,32 @@ namespace WindowsForms1
 
     class AnnotationTxt
     {
-        public bool Token()
+        public bool Token(bool isTrain)
         {
             try
             {
                 /*词典词*/
                 string[] dicsArray = FileRW.FileRead(FileRW.FilePath("dicOrderPath")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
-
-                /*测试语料*/
-                string[] testArray = FileRW.FileRead(FileRW.FilePath("testPath")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
-                string tokenTest = TokenNoPQ(dicsArray, testArray);
-                FileRW.FileWrite(FileRW.FilePath("testTokenPath"), tokenTest);
-
-                /*训练语料*/
-                string[] trainArray = FileRW.FileRead(FileRW.FilePath("trainPath")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
-                string tokenTrain = TokenNoPQ(dicsArray, trainArray);
-                FileRW.FileWrite(FileRW.FilePath("trainTokenPath"), tokenTrain);
-                return true;
+                if (isTrain == true)
+                {
+                    /*训练语料*/
+                    string[] trainArray = FileRW.FileRead(FileRW.FilePath("trainPath")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
+                    string tokenTrain = TokenNoPQ(dicsArray, trainArray);
+                    FileRW.FileWrite(FileRW.FilePath("trainTokenPath"), tokenTrain);
+                    return true;
+                }
+                else
+                {
+                    /*测试语料*/
+                    string[] testArray = FileRW.FileRead(FileRW.FilePath("testPath")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
+                    string tokenTest = TokenNoPQ(dicsArray, testArray);
+                    FileRW.FileWrite(FileRW.FilePath("testTokenPath"), tokenTest);
+                    return true;
+                }
             }
-            catch (Exception )
+            catch (Exception)
             {
-                return false;                
+                return false;
             }
         }
 
@@ -286,151 +291,158 @@ namespace WindowsForms1
             string[] dicsArray = FileRW.FileRead(FileRW.FilePath("dicOrderPath")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
 
             /*测试语料*/
-            string[] testArray = FileRW.FileRead(FileRW.FilePath("OutTestTxt")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });
+            //string[] testArray = FileRW.FileRead(FileRW.FilePath("OutTestTxt")).Replace("\r\n", " ").Trim().Split(new char[] { '；', ' ' });   文件的形式内部大批量测试语料
+            string[] testArray = FileRW.outTestSource.Trim().Split(new string[] { "\r\n", "，","。" }, new StringSplitOptions());
             string tokenTest = TokenNoPQ(dicsArray, testArray);
-            FileRW.FileWrite(FileRW.FilePath("testTokenPath"), tokenTest);
+            FileRW.FileWrite(FileRW.FilePath("OutTest"), tokenTest);
 
 
             string rootPath = Path.GetFullPath(FileRW.FilePath("crfsPath"));
             System.Diagnostics.Process p2 = new System.Diagnostics.Process();
             p2.StartInfo = new System.Diagnostics.ProcessStartInfo(rootPath + "crf_test.exe");//需要启动的程序名  
-            p2.StartInfo.Arguments = " -m " + rootPath + "model " + rootPath + "test.txt";
+            p2.StartInfo.Arguments = " -m " + rootPath + "model " + rootPath + "OutTest.txt";
             p2.StartInfo.RedirectStandardOutput = true;
             p2.StartInfo.UseShellExecute = false;
             p2.Start();
             FileRW.FileWrite(FileRW.FilePath("out_result_file"), p2.StandardOutput.ReadToEnd());
             p2.Close();
 
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
 
 
-        public string[] WordRelation(string outputTest)
+        public List<string>[] WordRelation(string outputTest)
         {
-            string term_bi = "";
-            string term_uni = "";
-            string term_str = "";
+            List<string>[] TwoKinds = new List<string>[2];
+            List<string> termBasic = new List<string>();
+            List<string> termCompound = new List<string>();
+            /*
+            List<string> termWord = new List<string>();
+            List<string> termRole = new List<string>();
+            List<string> termOrder = new List<string>();      
+             *备用 */
 
+            string term_word = "";
+            string term_role = "";
+            StringBuilder sb = new StringBuilder();
+            StringBuilder sbBE = new StringBuilder();
+
+            //用于判断是否相邻，是否是合成术语
             int i = 0;
-            int IndexBJoin = 0;
-            int IndexB = 0;
-            int IndexM = 0;
-            int IndexMJoin = 0;
-            int IndexE = 0;
-            int IndexEJoin = 0;
-            int CountE = 0;
-            int IndexS = 0;
-            int CountS = 0;
-            int IndexA = 0;
-            int titleID = 0;
+            int orderB = 100;
+            int orderM = 100;
+            int orderE = 100;
+            int orderS = 100;
+            int orderS0 = 100;
+
             while (outputTest.Contains("\r\n"))
             {
                 int char_index_i = outputTest.IndexOf("\r\n");
+                #region
                 if (char_index_i > 1)
                 {
-                    i++;
-                    term_str = outputTest.Substring(0, char_index_i);
-                    if (term_str.LastIndexOf("B") > 0)
+                    i++;//字所在序号
+                    term_word = outputTest.Substring(0, 1);//字
+                    term_role = outputTest.Substring(char_index_i - 1, 1); //角色
+                    if (term_role != "A" && term_role != "T")
                     {
-                        //---SB相连----------BEBE连续的情况-----B首次出现
-                        if (i - IndexS == 1 || IndexE + 1 == i || term_bi.Length == 0)
+                        /** 备用*3个list的下标一致来映射
+                        termOrder.Add(i.ToString());
+                        termWord.Add(term_word);
+                        termRole.Add(term_role);
+                         */
+
+                        //双或多字术语:以B开头的情况 ,排除SB,EB的情况
+                        if (term_role == "B" && orderS0 != i - 1 &&  orderE != i - 1)
                         {
-                            term_bi += term_str.Substring(0, 1);
-                            IndexBJoin = i;
+                            sbBE.Append(term_word);
+                            sb.Append(term_word);
+                            orderB = i;
+                        }
+                        else if (term_role == "M" && (orderB == i - 1 || orderM == i - 1))
+                        {
+                            sb.Append(term_word);
+                            sbBE.Append(term_word);
+                            orderM = i;
+                        }
+                        else if (term_role == "E" && (orderM == i - 1 || orderB == i - 1))
+                        {
+                            sb.Append(term_word);
+                            sbBE.Append(term_word);
+                            termBasic.Add(sbBE.ToString());
+                            sbBE.Clear();
+                            orderE = i;
+
+                        }//单字术语 ES的情况
+                        else if (term_role == "S" && orderE == i - 1)
+                        {
+                            orderS = i;
+                            termBasic.Add(term_word);
+                            sb.Append(term_word);
+                        }//EB相连的情况
+                        else if (term_role == "B" && orderE == i - 1)
+                        {
+                            orderB = i;
+                            sbBE.Append(term_word);
+                            sb.Append(term_word);
+                        }
+                        //首先遇到单个术语的情况 
+                        else if (term_role == "S" && orderS0 != i - 1)
+                        {
+                            orderS0 = i;
+                            termBasic.Add(term_word);
+                            sb.Append(term_word);
+                        }//SBME相连的情况
+                        else if (orderS0 == i - 1 && term_role == "B")
+                        {
+                            orderB = i;
+                            sbBE.Append(term_word);
+                            sb.Append(term_word);
+                        }//SS相连的情况
+                        else if (orderS0 == i - 1 && term_role == "S")
+                        {
+                            orderS0 = i;
+                            termBasic.Add(term_word);
+                            sb.Append(term_word);
                         }
                         else
                         {
-                            term_bi += "；" + term_str.Substring(0, 1);
-                            IndexBJoin = i;
-                        }
-                        term_uni += term_str.Substring(0, 1);
-                        IndexB = i;
-                    }
-                    else if (term_str.LastIndexOf("M") > 0)
-                    {
-                        //--BM-------------MM
-                        if (IndexBJoin == i - 1 || IndexM == i - 1)
-                        {
-                            term_bi += term_str.Substring(0, 1);
-                            IndexMJoin = i;
-                        }
-                        term_uni += term_str.Substring(0, 1);
-                        IndexM = i;
-                    }
-                    else if (term_str.LastIndexOf("E") > 0)
-                    {
-                        //----EB---------------EMMB----
-                        if (IndexBJoin == i - 1 || IndexMJoin == i - 1)
-                        {
-                            term_bi += term_str.Substring(0, 1);
-                            CountE += 1;
-                            IndexEJoin = i;
-                        }
-                        term_uni += term_str.Substring(0, 1) + "；";
-                        IndexE = i;
-                    }
-                    else if (term_str.LastIndexOf("S") > 0)
-                    {
-                        //------ES相连-------------SS相连-----------首次出现
-                        if (i == IndexE + 1 || IndexS == i - 1 || term_bi.Length == 0)
-                        {
-                            term_bi += term_str.Substring(0, 1);
-                            CountS += 1;
-                        }
-                        else
-                        {
-                            term_bi += "；" + term_str.Substring(0, 1);
-                        }
-                        term_uni += term_str.Substring(0, 1) + "；";
-                        IndexS = i;
-                    }
-                    else
-                    {
-                        //-----前面是--------------------------ABEA---------------------------------或开始为BEA-并且不是AA相连- ABE结束-----排除BES的情况
-                        if ((IndexE == i - 1 && IndexBJoin == IndexA + 1) && term_bi.Length > 0 || (IndexB == 1 && IndexA != i - 1) && IndexS != i - 1) //
-                        {
-                            if (term_bi.Contains("；"))  //高碳铬轴承钢管坯热轧后控制冷却工艺及水冷器
-                            {
-                                term_bi = term_bi.Substring(0, term_bi.Length - IndexE + IndexBJoin - 2);
-                            }
-                            else
-                            {
-                                term_bi = term_bi.Substring(0, term_bi.Length - IndexE + IndexBJoin - 1);
-                            }
-                        }
-                        else if (IndexS == i - 1 && IndexA == IndexS - 1)// 前面是ASA
-                        {
-                            if (term_bi.Contains("；")) //用含镍铬烟尘或氧化皮冶炼镍铬生铁的方法及产品
-                            {
-                                term_bi = term_bi.Substring(0, term_bi.Length - 2);
-                            }
-                            else if (term_bi.Length - 1 > 0)
-                            {
-                                term_bi = term_bi.Substring(0, term_bi.Length - 1);
-                            }
 
                         }
-                        IndexA = i;
+                    }
+                #endregion
+                    //只有当A紧邻任何一个术语的时候，才对合成术语做处理
+                    else if (i == orderB + 1 || i == orderM + 1 || i == orderE + 1 || i == orderS + 1 || i == orderS0 + 1)
+                    { //如果单子术语中最后一个元素与合成术语不同，那么将加入到合成术语
+                        //string  s1=termBasic.ElementAt(termBasic.Count-1).ToString();
+                        //  string s2=sb.ToString();
+                        if (!termBasic.Contains(sb.ToString()) && sb.ToString() != "")
+                        {
+                            termCompound.Add(sb.ToString());
+                        }
+                        sb.Clear();
                     }
                 }
                 else
                 {
-                    //int titleId = SentenceIndex[titleID]; //"update testText set keyWords='" + term_uni + "' where title_id=" + titleId
-                    //(new GetTrainTesttxt()).un_select_query("insert into backup_text (title_id,keyWords,[is_term]) values (" + titleId + ",'" + term_bi + "',1)");
-                    //(new GetTrainTesttxt()).un_select_query("insert into backup_text (title_id,keyWords,[is_term]) values (" + titleId + ",'" + term_uni + "',0)");
-                    titleID++;
-                    term_bi = "";
-                    term_uni = "";
-                    term_str = "";
+                    if (!termBasic.Contains(sb.ToString()) && sb.ToString() != "")
+                    {
+                        termCompound.Add(sb.ToString());
+                    }
+                    sb.Clear();
+                    i = 0;          //表示一句话的结束，开始处理，然后清空       
+                    orderB = 100;
+                    orderM = 100;
+                    orderE = 100;
+                    orderS = 100;
+                    orderS0 = 100;
                 }
                 outputTest = outputTest.Substring(char_index_i + 2);
             }
-            string[] wordRalation = new string[2];
-            wordRalation[0] = term_uni;
-            wordRalation[1] = term_bi;
-            return wordRalation;
-            //  TbTest_outputT.Text = "基本术语：" + term_uni + "\r\n\r\n合成术语：" + term_bi;
+            TwoKinds[0] = termBasic.Distinct().ToList();
 
+            TwoKinds[1] = termCompound.Distinct().ToList();
+            return TwoKinds;
         }
     }
 }

@@ -1,1 +1,0 @@
-1 all txt words are separated with ";" or "/r/n"

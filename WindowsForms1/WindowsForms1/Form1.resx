@@ -117,4 +117,16 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="textBox1.Text" xml:space="preserve">
+    <value>1.首先配置原始语料,注意文件的命名含义.
+   (1)dictionary0为原始核心词汇库，以换行符分隔
+   (2)feature为特征标注的依据语料，可观察示例文件的格式
+   (3)test0为原始的测试语料，以换行符分隔
+   (4)train0为原始标注语料，以换行符分隔
+   (5)该路径下除这4个文件外，其余文件问自动生成，请勿擅自改变命名。
+2.路径配置。
+    在下方输入框中输入文件夹路径，其中工具包CRFs以及模板等均放在以“crfs”
+命名的文件夹下。
+    示例：C:\Users\AMY\Desktop\thesis\crfs</value>
+  </data>
 </root>
